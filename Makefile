@@ -1,17 +1,18 @@
-# اسم الملف النهائي اللي هيطلع
-TWEAK_NAME = DooN_Wizard
+# المعماريات المدعومة (إجبار arm64 فقط لحل مشكلة IMG_1133)
+ARCHS = arm64
+TARGET = iphone:clang:latest:14.0
 
-# ربط ملف الكود الأساسي
+TWEAK_NAME = DooN_Wizard
 DooN_Wizard_FILES = Tweak.x
 
-# إضافة المكتبات اللازمة للتعامل مع الواجهات ومنع رسائل الخطأ
+# المكتبات اللي اتفقنا عليها لكسر الحماية ومنع الـ Error
 DooN_Wizard_FRAMEWORKS = UIKit Foundation Security CoreGraphics
 
-# إعدادات لضمان التوافق مع ملفات اللعبة والفريمورك
+# إعدادات الحماية والأداء
 DooN_Wizard_CFLAGS = -fobjc-arc
 DooN_Wizard_LDFLAGS = -Wl,-segalign,4000
 
-# تفعيل وضع البناء النهائي لضمان أعلى أداء وتخطي التأخير
+# لضمان إن الملف يشتغل على النسخة النهائية
 FINAL_PACKAGE = 1
 
 include $(THEOS)/makefiles/common.mk
