@@ -10,9 +10,7 @@ jobs:
 
       - name: Setup Theos & ldid
         run: |
-          # تثبيت أداة التوقيع لحل خطأ الصورة IMG_1126
           brew install ldid
-          # تحميل الثيوس والـ SDK
           sudo rm -rf /opt/theos
           sudo git clone --recursive https://github.com/theos/theos.git /opt/theos
           sudo git clone https://github.com/theos/sdks.git /tmp/sdks
@@ -22,11 +20,12 @@ jobs:
       - name: Build Dylib
         run: |
           export THEOS=/opt/theos
-          # بناء الملف (تجاهل بناء الـ deb مؤقتاً لضمان الحصول على الـ dylib)
+          # بناء الملف النهائي
           make FINAL_PACKAGE=1
           
       - name: Upload Result ✅
         uses: actions/upload-artifact@v4
         with:
           name: DooN-Dylib-Ready
-          path: .theos/obj/debug/*.dylib
+          # تعديل المسار لضمان إيجاد الملف بعد نجاح البناء في IMG_1126
+          path: .theos/obj/*.dylib
