@@ -1,47 +1,43 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-// دوال النجاح والتاريخ الأبدي
 static BOOL returnTrue() { return YES; }
-static id returnNil() { return nil; }
-static NSString* returnInfiniteDate() { return @"Key expire: 01.01.2099 13:37"; }
 
 %ctor {
-    // كسر كلاسات PIXEL RAID وفريمورك الويزارد
-    NSArray *classes = @[@"PixelRaidAuth", @"PixelRaidMenu", @"AuthManager", @"WizardAuth"];
-    for (NSString *className in classes) {
+    // 1. تفعيل الخصائص وكسر الحماية بناءً على ملفات Wizard
+    Class wizardCls = objc_getClass("Wizard");
+    if (wizardCls) {
+        class_replaceMethod(wizardCls, @selector(isKeyValid), (IMP)returnTrue, "B@:");
+        class_replaceMethod(wizardCls, @selector(checkKey:), (IMP)returnTrue, "B@:@");
+    }
+
+    // 2. كسر حماية Pixel Raid ومنع رسائل الخطأ
+    NSArray *authClasses = @[@"PixelRaidAuth", @"AuthManager", @"SCLAlertView"];
+    for (NSString *className in authClasses) {
         Class cls = objc_getClass([className UTF8String]);
         if (cls) {
-            class_replaceMethod(cls, @selector(checkKey:), (IMP)returnTrue, "B@:@");
-            class_replaceMethod(cls, @selector(isDeviceAuthorized), (IMP)returnTrue, "B@:");
-            class_replaceMethod(cls, @selector(getExpiryDateString), (IMP)returnInfiniteDate, "@@:");
+            class_replaceMethod(cls, @selector(isAuthorized), (IMP)returnTrue, "B@:");
+            class_replaceMethod(cls, @selector(showError:subTitle:closeButtonTitle:duration:), (IMP)nil, "v@:@@@d");
         }
     }
 
-    // منع رسالة الخطأ "Key is invalid"
-    Class alertCls = objc_getClass("SCLAlertView");
-    if (alertCls) {
-        class_replaceMethod(alertCls, @selector(showError:subTitle:closeButtonTitle:duration:), (IMP)returnNil, "v@:@@@d");
-    }
-
-    // إظهار الرسالة الترحيبية بطريقة حديثة (تجنب خطأ IMG_1134)
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    // 3. إظهار رسالة DooN UP عند تشغيل اللعبة (متوافق مع iOS 18)
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIWindowScene *scene = (UIWindowScene *)[[UIApplication sharedApplication].connectedScenes anyObject];
+        // التأكد من الوصول للنافذة الصحيحة لتجنب أخطاء keyWindow القديمة
         UIWindow *window = nil;
-        if (@available(iOS 13.0, *)) {
-            for (UIWindowScene* windowScene in [UIApplication sharedApplication].connectedScenes) {
-                if (windowScene.activationState == UISceneActivationStateForegroundActive) {
-                    window = windowScene.windows.firstObject;
-                    break;
-                }
+        for (UIWindow *w in scene.windows) {
+            if (w.isKeyWindow) {
+                window = w;
+                break;
             }
         }
-        
-        if (window && window.rootViewController) {
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"DooN UP ✅" 
-                                          message:@"تم التفعيل للأبد بنجاح" 
-                                          preferredStyle:1];
-            [alert addAction:[UIAlertAction actionWithTitle:@"استمتع" style:0 handler:nil]];
-            [window.rootViewController presentViewController:alert animated:YES completion:nil];
-        }
+        if (!window) window = scene.windows.firstObject;
+
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"DooN UP ✅" 
+                                      message:@"Welcome Back" 
+                                      preferredStyle:1];
+        [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:0 handler:nil]];
+        [window.rootViewController presentViewController:alert animated:YES completion:nil];
     });
 }
