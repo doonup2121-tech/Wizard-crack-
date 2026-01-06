@@ -1,0 +1,43 @@
+name: DooN_Clean_Build
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Theos & SDK
+        run: |
+          sudo git clone --recursive https://github.com/theos/theos.git /opt/theos
+          git clone https://github.com/theos/sdks.git /opt/theos/sdks
+          sudo chown -R $(id -u):$(id -g) /opt/theos
+
+      - name: Auto-Generate Project Files
+        run: |
+          # إنشاء ملف الـ control
+          echo "Package: com.doon.wizard" > control
+          echo "Name: DooN UP ✅" >> control
+          echo "Version: 1.0" >> control
+          echo "Architecture: iphoneos-arm" >> control
+
+          # إنشاء الـ Makefile بمسارات ثابتة لضمان النجاح
+          echo "ARCHS = arm64 arm64e" > Makefile
+          echo "TARGET = iphone:clang:latest:14.0" >> Makefile
+          echo "include /opt/theos/makefiles/common.mk" >> Makefile
+          echo "TWEAK_NAME = DooN_Wizard" >> Makefile
+          echo "DooN_Wizard_FILES = Tweak.x" >> Makefile
+          echo "DooN_Wizard_CFLAGS = -fobjc-arc" >> Makefile
+          echo "include /opt/theos/makefiles/tweak.mk" >> Makefile
+
+      - name: Build Dylib
+        run: |
+          export THEOS=/opt/theos
+          make package FINAL_PACKAGE=1
+          
+      - name: Upload ✅
+        uses: actions/upload-artifact@v4
+        with:
+          name: DooN-Dylib-Success
+          path: .theos/obj/debug/*.dylib
