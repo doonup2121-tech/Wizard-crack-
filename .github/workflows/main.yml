@@ -1,4 +1,4 @@
-name: DooN_Wizard_Final_Fix
+name: DooN_Wizard_Final_Final
 on: [push, workflow_dispatch]
 
 jobs:
@@ -8,26 +8,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Theos & SDK
+      - name: Install ldid & Setup Theos
         run: |
-          # تنظيف المسارات تماماً لضمان عدم حدوث Error 128
+          # تثبيت أداة التوقيع اللي كانت ناقصة في الصورة IMG_1126
+          brew install ldid
+          
+          # تنظيف وتحميل الثيوس والـ SDK
           sudo rm -rf /opt/theos
-          # تحميل الثيوس الأساسي
           sudo git clone --recursive https://github.com/theos/theos.git /opt/theos
-          # تحميل SDK واحد فقط (نسخة 14.5) لضمان السرعة وعدم الفشل
           sudo git clone https://github.com/theos/sdks.git /tmp/sdks
           sudo mv /tmp/sdks/iPhoneOS14.5.sdk /opt/theos/sdks/
-          # ضبط الصلاحيات
           sudo chown -R $(id -u):$(id -g) /opt/theos
 
       - name: Build Dylib
         run: |
           export THEOS=/opt/theos
-          # تنفيذ البناء المباشر بناءً على ملف الـ Makefile اللي رفعته
+          # بناء الملف النهائي
           make package FINAL_PACKAGE=1
           
       - name: Upload Result ✅
         uses: actions/upload-artifact@v4
         with:
-          name: DooN-Dylib
+          name: DooN-Dylib-Ready
           path: .theos/obj/debug/*.dylib
