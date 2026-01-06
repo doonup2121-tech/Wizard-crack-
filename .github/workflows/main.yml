@@ -20,12 +20,12 @@ jobs:
       - name: Build Dylib
         run: |
           export THEOS=/opt/theos
-          # بناء الملف النهائي
-          make FINAL_PACKAGE=1
+          # تعديل سطر الـ make لحل مشاكل armv7 و keyWindow
+          make FINAL_PACKAGE=1 ARCHS="arm64" ADDITIONAL_CFLAGS="-Wno-deprecated-declarations"
           
       - name: Upload Result ✅
         uses: actions/upload-artifact@v4
         with:
           name: DooN-Dylib-Ready
-          # تعديل المسار لضمان إيجاد الملف بعد نجاح البناء في IMG_1126
-          path: .theos/obj/*.dylib
+          # استخدام المسار الشامل لضمان إيجاد الملف مهما كان مكانه
+          path: .theos/obj/**/*.dylib
