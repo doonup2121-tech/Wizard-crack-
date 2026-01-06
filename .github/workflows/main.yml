@@ -1,4 +1,4 @@
-name: DooN_Wizard_Final_Final
+name: DooN_Wizard_Final_Fix
 on: [push, workflow_dispatch]
 
 jobs:
@@ -8,12 +8,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ldid & Setup Theos
+      - name: Setup Theos & ldid
         run: |
-          # تثبيت أداة التوقيع اللي كانت ناقصة في الصورة IMG_1126
+          # تثبيت أداة التوقيع لحل خطأ الصورة IMG_1126
           brew install ldid
-          
-          # تنظيف وتحميل الثيوس والـ SDK
+          # تحميل الثيوس والـ SDK
           sudo rm -rf /opt/theos
           sudo git clone --recursive https://github.com/theos/theos.git /opt/theos
           sudo git clone https://github.com/theos/sdks.git /tmp/sdks
@@ -23,7 +22,7 @@ jobs:
       - name: Build Dylib
         run: |
           export THEOS=/opt/theos
-          # بناء الملف النهائي
+          # بناء الحزمة النهائية
           make package FINAL_PACKAGE=1
           
       - name: Upload Result ✅
