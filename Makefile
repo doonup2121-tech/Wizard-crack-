@@ -1,14 +1,18 @@
-ARCHS = arm64 arm64e
-TARGET = iphone:clang:14.5:14.0
-DEBUG = 0
+# اسم الملف النهائي اللي هيطلع
+TWEAK_NAME = DooN_Wizard
+
+# ربط ملف الكود الأساسي
+DooN_Wizard_FILES = Tweak.x
+
+# إضافة المكتبات اللازمة للتعامل مع الواجهات ومنع رسائل الخطأ
+DooN_Wizard_FRAMEWORKS = UIKit Foundation Security CoreGraphics
+
+# إعدادات لضمان التوافق مع ملفات اللعبة والفريمورك
+DooN_Wizard_CFLAGS = -fobjc-arc
+DooN_Wizard_LDFLAGS = -Wl,-segalign,4000
+
+# تفعيل وضع البناء النهائي لضمان أعلى أداء وتخطي التأخير
 FINAL_PACKAGE = 1
 
 include $(THEOS)/makefiles/common.mk
-
-TWEAK_NAME = DooN_Wizard
-
-DooN_Wizard_FILES = Tweak.x
-DooN_Wizard_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable
-DooN_Wizard_FRAMEWORKS = UIKit Foundation Security
-
 include $(THEOS_MAKE_PATH)/tweak.mk

@@ -1,57 +1,60 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-// دالة ثابتة لإرجاع قيمة "نجاح" (YES) لتخطي الفحوصات
+// --- [ قسم الإضافات والدوال الثابتة ] ---
+
+// دالة لفرض حالة "النجاح" دائماً
 static BOOL returnTrue() { return YES; }
 
+// دالة لإخفاء أي نص خطأ (nil)
+static id returnNil() { return nil; }
+
+// دالة التاريخ الأبدي للمنيو
+static NSString* returnInfiniteDate() { return @"Key expire: 01.01.2099 13:37"; }
+
+// --- [ بداية عملية الاختراق والدمج ] ---
+
 %ctor {
-    NSLog(@"[DooN UP] Ultimate Bypass Started...");
-
-    // 1. كسر حماية الفريم ورك (WizardFrameworkAuth)
-    Class wizAuth = objc_getClass("WizardFrameworkAuth");
-    if (wizAuth) {
-        class_replaceMethod(wizAuth, @selector(isDeviceAuthorized), (IMP)returnTrue, "B@:");
-        class_replaceMethod(wizAuth, @selector(checkSubscription), (IMP)returnTrue, "B@:");
-    }
+    // 1. استهداف كلاسات PIXEL RAID وفريمورك Wizard بناءً على فحصنا
+    NSArray *classes = @[@"PixelRaidAuth", @"PixelRaidMenu", @"AuthManager", @"WizardAuth", @"WizardFrameworkAuth"];
     
-    // 2. كسر فحص المفتاح (WizardAuth) المستنتج من الديلب القديم
-    Class mainAuth = objc_getClass("WizardAuth");
-    if (mainAuth) {
-        class_replaceMethod(mainAuth, @selector(checkKey:), (IMP)returnTrue, "B@:@");
-    }
-
-    // 3. تخطي فحص البيانات المحلية (.dat)
-    Class dataManager = objc_getClass("WizardDataManager");
-    if (dataManager) {
-        class_replaceMethod(dataManager, @selector(isLocalKeyValid), (IMP)returnTrue, "B@:");
-    }
-
-    // 4. إظهار رسالة الترحيب DooN UP ✅ مع معالجة خطأ keyWindow
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        
-        UIWindow *window = nil;
-        // محاولة الحصول على النافذة بطريقة متوافقة مع iOS 13+ لتجنب أخطاء البناء
-        if (@available(iOS 13.0, *)) {
-            for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
-                if (scene.activationState == UISceneActivationStateForegroundActive) {
-                    window = scene.windows.firstObject;
-                    break;
-                }
-            }
-        }
-        
-        if (!window) {
-            window = [UIApplication sharedApplication].keyWindow;
-        }
-
-        if (window && window.rootViewController) {
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"DooN UP ✅" 
-                                          message:@"تم دمج الملفات وتخطي الحماية بنجاح\nاستمتع يا وحش" 
-                                          preferredStyle:UIAlertControllerStyleAlert];
-                                          
-            [alert addAction:[UIAlertAction actionWithTitle:@"دخول" style:UIAlertActionStyleDefault handler:nil]];
+    for (NSString *className in classes) {
+        Class cls = objc_getClass([className UTF8String]);
+        if (cls) {
+            // كسر فحص المفتاح وتخطي واجهة Welcome
+            class_replaceMethod(cls, @selector(checkKey:), (IMP)returnTrue, "B@:@");
+            class_replaceMethod(cls, @selector(isDeviceAuthorized), (IMP)returnTrue, "B@:");
+            class_replaceMethod(cls, @selector(validateKey:), (IMP)returnTrue, "B@:@");
+            class_replaceMethod(cls, @selector(isKeyValid), (IMP)returnTrue, "B@:");
             
-            [window.rootViewController presentViewController:alert animated:YES completion:nil];
+            // إضافة: تخطي السيرفر ومنع تأخير الثانيتين
+            class_replaceMethod(cls, @selector(validateRemoteKey:), (IMP)returnTrue, "B@:@");
+            
+            // إضافة: تثبيت التاريخ الأبدي في واجهة المنيو
+            class_replaceMethod(cls, @selector(getExpiryDateString), (IMP)returnInfiniteDate, "@@:");
+            class_replaceMethod(cls, @selector(getExpirationDate), (IMP)returnInfiniteDate, "@@:");
+        }
+    }
+
+    // 2. إضافة منع رسالة الخطأ "Key is invalid"
+    // بنستهدف كلاس التنبيهات SCLAlertView اللي بيظهر في الصورة
+    Class alertCls = objc_getClass("SCLAlertView");
+    if (alertCls) {
+        // لو اللعبة حاولت تنادي دالة showError، الكود هيخليها متعملش حاجة
+        class_replaceMethod(alertCls, @selector(showError:subTitle:closeButtonTitle:duration:), (IMP)returnNil, "v@:@@@d");
+        // وأيضاً منع رسائل الـ Notice والـ Warning عشان نضمن سلاسة الدخول
+        class_replaceMethod(alertCls, @selector(showNotice:subTitle:closeButtonTitle:duration:), (IMP)returnNil, "v@:@@@d");
+    }
+
+    // 3. رسالة DooN UP ✅ النهائية للتأكيد
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIWindow *win = [UIApplication sharedApplication].keyWindow;
+        if (win && win.rootViewController) {
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"DooN UP ✅" 
+                                          message:@"تم دمج كل الإضافات:\n- تخطي الحماية\n- منع رسائل الخطأ\n- اشتراك أبدي (2099)" 
+                                          preferredStyle:1];
+            [alert addAction:[UIAlertAction actionWithTitle:@"دخول مباشر" style:0 handler:nil]];
+            [win.rootViewController presentViewController:alert animated:YES completion:nil];
         }
     });
 }
