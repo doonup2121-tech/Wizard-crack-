@@ -22,8 +22,8 @@ jobs:
       - name: Build Dylib
         run: |
           export THEOS=/opt/theos
-          # بناء الحزمة النهائية
-          make package FINAL_PACKAGE=1
+          # بناء الملف (تجاهل بناء الـ deb مؤقتاً لضمان الحصول على الـ dylib)
+          make FINAL_PACKAGE=1
           
       - name: Upload Result ✅
         uses: actions/upload-artifact@v4
