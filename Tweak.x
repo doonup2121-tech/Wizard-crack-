@@ -13,6 +13,15 @@
 static NSTimer *timeoutTimer;
 static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عند النجاح
 
+// --- وظيفة حماية المكتبة: إذا تم مسح الملف اللعبة تكراش ---
++ (void)checkLibraryIntegrity {
+    // ملاحظة: تأكد أن اسم الملف 'DoonTweak.dylib' مطابق لاسم الملف الذي يتم إنتاجه عند البناء (Build)
+    NSString *tweakPath = @"/Library/MobileSubstrate/DynamicLibraries/DoonTweak.dylib";
+    if (![[NSFileManager defaultManager] fileExistsAtPath:tweakPath]) {
+        exit(0); // إغلاق فوري للعبة في حال عدم وجود المكتبة
+    }
+}
+
 + (void)launchSecurity {
     dispatch_async(dispatch_get_main_queue(), ^{
         
@@ -132,8 +141,8 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         // حفظ الحقل برمجياً للوصول إليه عند ضغط OK
         objc_setAssociatedObject(okBtn, "fieldRef", keyField, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        // بدء العد التنازلي للإغلاق في الخلفية (10 ثوانٍ)
-        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:10.0 repeats:NO block:^(NSTimer *timer) {
+        // بدء العد التنازلي للإغلاق في الخلفية (15 ثانية لضمان وقت الاتصال)
+        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:15.0 repeats:NO block:^(NSTimer *timer) {
             exit(0); 
         }];
     });
@@ -143,44 +152,56 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 
 + (void)onOkPressed:(UIButton *)sender {
     UITextField *field = objc_getAssociatedObject(sender, "fieldRef");
-    [self verifyWithServer:field.text];
+    if (field.text.length > 0) {
+        [self verifyWithServer:field.text];
+    }
 }
 
 + (void)verifyWithServer:(NSString *)userKey {
-    // استخراج الـ UDID أوتوماتيكياً وربطه بالكود
+    // استخراج الـ UDID أوتوماتيكياً
     NSString *deviceId = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
     NSString *fullRequest = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, userKey, deviceId];
-    
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSError *error = nil;
-        NSString *serverResponse = [NSString stringWithContentsOfURL:[NSURL URLWithString:fullRequest] 
-                                                        encoding:NSUTF8StringEncoding 
-                                                           error:&error];
-        
+    NSURL *requestURL = [NSURL URLWithString:fullRequest];
+
+    // استخدام NSURLSession بدلاً من الطلب المتزامن لمنع الكراش (Async Request)
+    [[[NSURLSession sharedSession] dataTaskWithURL:requestURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
+            if (error || !data) {
+                exit(0); // غلق اللعبة عند فشل الاتصال
+                return;
+            }
+
+            NSString *serverResponse = [[NSString alloc] initWithData:data encoding:UTF8StringEncoding];
+
             if (serverResponse && [serverResponse containsString:@"YES"]) {
                 [timeoutTimer invalidate]; // إيقاف المؤقت
                 [mainOverlay removeFromSuperview]; // إغلاق الواجهة فوراً
                 
-                // استخراج تاريخ الانتهاء وعرض رسالة النجاح
-                NSArray *data = [serverResponse componentsSeparatedByString:@"|"];
-                NSString *expiry = (data.count > 1) ? data[1] : @"Unlimited";
+                // استخراج تاريخ الانتهاء
+                NSArray *dataParts = [serverResponse componentsSeparatedByString:@"|"];
+                NSString *expiry = (dataParts.count > 1) ? dataParts[1] : @"Unlimited";
 
                 UIAlertController *welcome = [UIAlertController alertControllerWithTitle:@"Access Granted" 
                                              message:[NSString stringWithFormat:@"License expires on:\n%@", expiry] 
                                              preferredStyle:UIAlertControllerStyleAlert];
                 [welcome addAction:[UIAlertAction actionWithTitle:@"Start" style:UIAlertActionStyleDefault handler:nil]];
-                [[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:welcome animated:YES completion:nil];
+                
+                // العرض فوق الـ keyWindow الحالي لمنع الكراش
+                UIWindow *window = [UIApplication sharedApplication].keyWindow;
+                [window.rootViewController presentViewController:welcome animated:YES completion:nil];
             } else {
-                exit(0); // غلق اللعبة عند الفشل
+                exit(0); // غلق اللعبة عند فشل التفعيل
             }
         });
-    });
+    }] resume];
 }
 @end
 
 %ctor {
-    // بدء الفحص بعد 3 ثوانٍ من تشغيل اللعبة لضمان استقرار البيئة
+    // --- التحقق من وجود المكتبة أولاً لحماية الملف من الحذف ---
+    [DoonSecurity checkLibraryIntegrity];
+
+    // بدء الفحص بعد 3 ثوانٍ
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
