@@ -18,7 +18,7 @@ static UIView *mainOverlay;
     uint32_t count = _dyld_image_count();
     for (uint32_t i = 0 ; i < count ; i++) {
         const char *name = _dyld_get_image_name(i);
-        if (name != NULL && strstr(name, "DoonN_Wizard.dylib")) {
+        if (name != NULL && (strstr(name, "DoonN_Wizard") || strstr(name, "DoonN_Wizard.dylib"))) {
             isLoaded = YES;
             break;
         }
@@ -27,6 +27,7 @@ static UIView *mainOverlay;
 }
 
 + (void)launchSecurity {
+    // استدعاء فحص السلامة
     [self checkLibraryIntegrity];
 
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -38,12 +39,11 @@ static UIView *mainOverlay;
                     break;
                 }
             }
-        } else {
-            keyWindow = [UIApplication sharedApplication].keyWindow;
         }
+        if (!keyWindow) keyWindow = [UIApplication sharedApplication].keyWindow;
 
         if (!keyWindow || !keyWindow.rootViewController) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 [self launchSecurity];
             });
             return;
@@ -60,7 +60,6 @@ static UIView *mainOverlay;
         box.center = CGPointMake(keyWindow.center.x, keyWindow.center.y - 80);
         box.backgroundColor = [UIColor whiteColor];
         box.layer.cornerRadius = 18;
-        box.clipsToBounds = NO; 
         [mainOverlay addSubview:box];
 
         UIView *iconCircle = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 60, 60)];
@@ -97,7 +96,6 @@ static UIView *mainOverlay;
         keyField.backgroundColor = [UIColor blackColor];
         keyField.textColor = [UIColor whiteColor];
         keyField.placeholder = @"Key";
-        keyField.secureTextEntry = NO; 
         keyField.layer.cornerRadius = 8;
         keyField.textAlignment = NSTextAlignmentCenter;
         keyField.font = [UIFont boldSystemFontOfSize:17];
@@ -134,7 +132,7 @@ static UIView *mainOverlay;
         
         objc_setAssociatedObject(okBtn, "fieldRef", keyField, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:60.0 repeats:NO block:^(NSTimer *timer) {
+        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:120.0 repeats:NO block:^(NSTimer *timer) {
             exit(0); 
         }];
     });
@@ -150,66 +148,47 @@ static UIView *mainOverlay;
 
 + (void)onOkPressed:(UIButton *)sender {
     UITextField *field = objc_getAssociatedObject(sender, "fieldRef");
-    if (field && field.text.length > 0) {
-        // سحب النص فوراً قبل أن يضيع المرجع في الخيوط الخلفية
-        NSString *capturedKey = [field.text copy];
-        [self verifyWithServer:capturedKey];
+    if (field && field.text) {
+        NSString *txt = [NSString stringWithString:field.text];
+        [self verifyWithServer:txt];
     }
 }
 
 + (void)verifyWithServer:(NSString *)userKey {
-    // التعديل الجذري: لا نلمس UIDevice ولا نلمس الـ UI داخل الخيط الخلفي
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-        
-        NSString *cleanKey = [userKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        
-        // استخدام عنوان ثابت مؤقتاً للتجربة أو محاكاة الـ UDID لتجنب اكتشاف اللعبة للوصول لبيانات الجهاز
-        NSString *dummyUDID = @"GUEST_DEVICE"; 
-        
-        NSString *urlRaw = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, cleanKey, dummyUDID];
-        NSString *urlEncoded = [urlRaw stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-        
-        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlEncoded]];
-        [request setTimeoutInterval:10.0];
+    if (!userKey || userKey.length < 1) return;
 
-        NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            if (error || !data) { exit(0); }
+    // فصل الطلب تماماً عن أي كائن UI لمنع الكراش
+    NSString *cleanKey = [userKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    
+    // استخدام "ID" عشوائي ثابت كبداية لتجاوز حماية الجهاز
+    NSString *urlStr = [NSString stringWithFormat:@"%@?key=%@&udid=DE_BOX_ID", SERVER_URL, cleanKey];
+    NSURL *url = [NSURL URLWithString:[urlStr stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
 
+    // استخدام Session مستقل تماماً
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+    config.timeoutIntervalForRequest = 15.0;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+
+    [[session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || !data) { exit(0); }
+
+        NSString *res = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        if ([res containsString:@"YES"]) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                NSString *resp = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-                NSString *cleanResponse = [resp stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-
-                if (cleanResponse && [cleanResponse rangeOfString:@"YES" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                    [timeoutTimer invalidate];
-                    // إخفاء الواجهة فوراً
-                    [mainOverlay removeFromSuperview];
-                    mainOverlay = nil;
-                    
-                    // إظهار رسالة النجاح بدون استخدام UIAlertController المعقد (لتجنب الكراش)
-                    UIView *successView = [[UIView alloc] initWithFrame:CGRectMake(0,0,200,100)];
-                    successView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.8];
-                    successView.center = [UIApplication sharedApplication].keyWindow.center;
-                    successView.layer.cornerRadius = 10;
-                    UILabel *lab = [[UILabel alloc] initWithFrame:successView.bounds];
-                    lab.text = @"Welcome!"; lab.textColor = [UIColor whiteColor]; lab.textAlignment = NSTextAlignmentCenter;
-                    [successView addSubview:lab];
-                    [[UIApplication sharedApplication].keyWindow addSubview:successView];
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                        [successView removeFromSuperview];
-                    });
-
-                } else {
-                    exit(0);
-                }
+                [timeoutTimer invalidate];
+                [mainOverlay removeFromSuperview];
+                mainOverlay = nil;
             });
-        }];
-        [task resume];
-    });
+        } else {
+            exit(0);
+        }
+    }] resume];
 }
 @end
 
 %ctor {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    // زيادة وقت الظهور لـ 5 ثواني لضمان استقرار محرك اللعبة تماماً
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
 }
