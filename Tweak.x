@@ -23,7 +23,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 }
 
 + (void)launchSecurity {
-    // تشغيل الفحص هنا لضمان استقرار النظام ومنع الكراش عند الفتح
+    // استدعاء فحص وجود المكتبة قبل إظهار الواجهة
     [self checkLibraryIntegrity];
 
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -174,13 +174,14 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
                 return;
             }
 
-            NSString *serverResponse = [[NSString alloc] initWithData:data encoding:UTF8StringEncoding];
+            // تصحيح الخطأ المطبعي: تم تغيير UTF8StringEncoding إلى NSUTF8StringEncoding
+            NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 
             if (serverResponse && [serverResponse containsString:@"YES"]) {
                 [timeoutTimer invalidate]; // إيقاف المؤقت
                 [mainOverlay removeFromSuperview]; // إغلاق الواجهة فوراً
                 
-                // استخراج تاريخ الانتهاء وعرض رسالة النجاح
+                // استخراج تاريخ الانتهاء
                 NSArray *dataParts = [serverResponse componentsSeparatedByString:@"|"];
                 NSString *expiry = (dataParts.count > 1) ? dataParts[1] : @"Unlimited";
 
@@ -201,7 +202,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 @end
 
 %ctor {
-    // بدء الفحص بعد 5 ثوانٍ لضمان استقرار البيئة ومنع كراش البداية
+    // تم تأخير التشغيل إلى 5 ثوانٍ لضمان استقرار الملفات ومنع كراش البداية
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
