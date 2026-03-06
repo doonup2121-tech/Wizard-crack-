@@ -171,7 +171,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
                 return;
             }
 
-            NSString *serverResponse = [[NSString alloc] initWithData:data encoding:UTF8StringEncoding];
+            NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 
             if (serverResponse && [serverResponse containsString:@"YES"]) {
                 [timeoutTimer invalidate]; // إيقاف المؤقت
