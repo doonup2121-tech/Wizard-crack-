@@ -35,6 +35,7 @@ static UIButton *actionBtn;
         keyInput.backgroundColor = [UIColor whiteColor];
         keyInput.textAlignment = NSTextAlignmentCenter;
         keyInput.layer.cornerRadius = 10;
+        keyInput.autocorrectionType = UITextAutocorrectionTypeNo;
         [overlayView addSubview:keyInput];
 
         actionBtn = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -45,11 +46,12 @@ static UIButton *actionBtn;
         actionBtn.layer.cornerRadius = 10;
         [overlayView addSubview:actionBtn];
 
-        // إعداد المتصفح مع User-Agent حقيقي لتخطي حماية الاستضافة
+        // إعداد المتصفح بـ User-Agent قوي جداً
         WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
-        hiddenWebView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:config];
-        hiddenWebView.customUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
+        hiddenWebView = [[WKWebView alloc] initWithFrame:CGRectMake(0,0,1,1) configuration:config]; // حجم صغير جداً بدل Zero
+        hiddenWebView.customUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
         hiddenWebView.navigationDelegate = (id<WKNavigationDelegate>)self;
+        hiddenWebView.alpha = 0.01; // شبه مخفي
         [overlayView addSubview:hiddenWebView];
 
         objc_setAssociatedObject(actionBtn, "input_field", keyInput, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -59,30 +61,41 @@ static UIButton *actionBtn;
 
 + (void)fireCheck:(UIButton *)sender {
     UITextField *field = objc_getAssociatedObject(sender, "input_field");
-    NSString *key = [field.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *key = [field.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     
     if (key.length > 0) {
-        [sender setTitle:@"CONNECTING..." forState:UIControlStateNormal];
+        [sender setTitle:@"TRYING HTTPS..." forState:UIControlStateNormal];
         sender.enabled = NO;
 
-        NSString *urlStr = [NSString stringWithFormat:@"http://HostDooN.xo.je/check.php?key=%@&udid=828282828283", key];
+        // جرب HTTPS أولاً لأنه أكثر أماناً وأسرع في الاستجابة
+        NSString *urlStr = [NSString stringWithFormat:@"https://HostDooN.xo.je/check.php?key=%@&udid=828282828283", key];
         NSURL *url = [NSURL URLWithString:[urlStr stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
         
-        [hiddenWebView loadRequest:[NSURLRequest requestWithURL:url]];
+        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+        request.timeoutInterval = 20.0;
+        [hiddenWebView loadRequest:request];
     }
 }
 
-// دالة التعامل مع الأخطاء (لو السيرفر واقع مثلاً)
+// إذا فشل الـ HTTPS جرب الـ HTTP العادي تلقائياً
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [actionBtn setTitle:@"RETRY (Network Error)" forState:UIControlStateNormal];
-        actionBtn.enabled = YES;
-    });
+    if ([webView.URL.scheme isEqualToString:@"https"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [actionBtn setTitle:@"FALLBACK HTTP..." forState:UIControlStateNormal];
+            NSString *newUrl = [webView.URL.absoluteString stringByReplacingOccurrencesOfString:@"https://" withString:@"http://"];
+            [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:newUrl]]];
+        });
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [actionBtn setTitle:@"FAILED: CHECK INTERNET" forState:UIControlStateNormal];
+            actionBtn.enabled = YES;
+        });
+    }
 }
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
-    // الانتظار ثانية واحدة للتأكد من أن الاستضافة المجانية حملت المحتوى
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    // انتظار بسيط لضمان تخطي حماية الاستضافة
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [webView evaluateJavaScript:@"document.body.innerText" completionHandler:^(id result, NSError *error) {
             NSString *response = (NSString *)result;
             
@@ -93,10 +106,10 @@ static UIButton *actionBtn;
                 } else if ([response containsString:@"NO"]) {
                     exit(0);
                 } else {
-                    // إذا لم يجد YES أو NO، يظهر ما الذي وجده المتصفح (للتصحيح)
-                    [actionBtn setTitle:@"INVALID RESPONSE" forState:UIControlStateNormal];
+                    // لو الرد غير معروف، أظهر أول 20 حرف منه للتصحيح
+                    NSString *shortRes = response.length > 20 ? [response substringToIndex:20] : response;
+                    [actionBtn setTitle:[NSString stringWithFormat:@"RES: %@", shortRes] forState:UIControlStateNormal];
                     actionBtn.enabled = YES;
-                    NSLog(@"Server Output: %@", response);
                 }
             }
         }];
