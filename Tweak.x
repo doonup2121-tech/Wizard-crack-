@@ -83,7 +83,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 
         // 3. الأيقونة الزرقاء الدائرية (i) في الأعلى
         UIView *iconCircle = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 60, 60)];
-        iconCircle.backgroundColor = [UIColor colorWithRed:0.23 green:0.48 blue:0.85 alpha:1.0];
+        iconCircle.backgroundColor = [UIColor colorRed:0.23 green:0.48 blue:0.85 alpha:1.0];
         iconCircle.layer.cornerRadius = 30;
         iconCircle.center = CGPointMake(155, 0); 
         iconCircle.layer.borderWidth = 3;
@@ -118,16 +118,16 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         keyField.backgroundColor = [UIColor blackColor];
         keyField.textColor = [UIColor whiteColor];
         keyField.placeholder = @"Key";
-        keyField.secureTextEntry = NO; // تعديل: نص عادي وليس باسورد
+        keyField.secureTextEntry = NO; 
         keyField.layer.cornerRadius = 8;
         keyField.textAlignment = NSTextAlignmentCenter;
         keyField.font = [UIFont boldSystemFontOfSize:17];
         keyField.keyboardAppearance = UIKeyboardAppearanceDark;
-        keyField.returnKeyType = UIReturnKeyDone; // زر Done في الكيبورد
-        keyField.delegate = (id<UITextFieldDelegate>)self; // ربط الـ Delegate
+        keyField.returnKeyType = UIReturnKeyDone; 
+        keyField.delegate = (id<UITextFieldDelegate>)self; 
         
-        // ميزة اللصق التلقائي: مراقبة تغيير النص لبدء الفحص فوراً
-        [keyField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
+        // ملاحظة: تم إيقاف الفحص التلقائي هنا لمنع كراش اللصق (Paste)
+        // [keyField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
         
         NSDictionary *attr = @{NSForegroundColorAttributeName: [UIColor grayColor]};
         keyField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Key" attributes:attr];
@@ -159,16 +159,16 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         
         objc_setAssociatedObject(okBtn, "fieldRef", keyField, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        // زيادة وقت المؤقت قليلاً لإعطاء فرصة للكيبورد
-        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:35.0 repeats:NO block:^(NSTimer *timer) {
+        // المؤقت الزمني للإغلاق التلقائي
+        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:45.0 repeats:NO block:^(NSTimer *timer) {
             exit(0); 
         }];
     });
 }
 
-// وظيفة الفحص التلقائي عند الكتابة أو اللصق (إذا وصل طول النص لـ 20 حرف لضمان اكتمال الكود)
+// وظيفة الفحص التلقائي (اختيارية، تم تعطيل استدعائها بالأعلى لمنع كراش اللصق)
 + (void)textFieldDidChange:(UITextField *)textField {
-    if (textField.text.length >= 20) {
+    if (textField.text.length >= 25) {
         [self verifyWithServer:textField.text];
     }
 }
@@ -190,12 +190,13 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 }
 
 + (void)verifyWithServer:(NSString *)userKey {
-    // التحسين المضاف: تنظيف الكود من أي مسافات مخفية ناتجة عن اللصق
+    // 1. تنظيف المفتاح من المسافات المخفية
     NSString *cleanKey = [userKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     
+    // 2. الحصول على UDID
     NSString *deviceId = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
     
-    // التحسين المضاف: تشفير الرابط (Encoding) لضمان عدم فشل الطلب بسبب الرموز
+    // 3. تشفير الرابط بالكامل لضمان الاستقرار
     NSString *urlRaw = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, cleanKey, deviceId];
     NSString *urlEncoded = [urlRaw stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
     NSURL *requestURL = [NSURL URLWithString:urlEncoded];
@@ -208,9 +209,10 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
             }
 
             NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            // تنظيف رد السيرفر للتأكد من المقارنة الصحيحة
+            // تنظيف رد السيرفر
             NSString *cleanResponse = [serverResponse stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
+            // 4. التحقق من وجود كلمة YES بمرونة (Case Insensitive)
             if (cleanResponse && [cleanResponse rangeOfString:@"YES" options:NSCaseInsensitiveSearch].location != NSNotFound) {
                 [timeoutTimer invalidate]; 
                 [mainOverlay removeFromSuperview]; 
@@ -234,7 +236,6 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 @end
 
 %ctor {
-    // التوقيت: 2.5 ثانية لظهور الواجهة
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
