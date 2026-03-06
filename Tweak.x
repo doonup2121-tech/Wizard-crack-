@@ -23,6 +23,9 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 }
 
 + (void)launchSecurity {
+    // تشغيل الفحص هنا لضمان استقرار النظام ومنع الكراش عند الفتح
+    [self checkLibraryIntegrity];
+
     dispatch_async(dispatch_get_main_queue(), ^{
         
         // --- تعديل الاستقرار (1): التأكد من وجود نافذة نشطة والفحص المتكرر ---
@@ -171,13 +174,13 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
                 return;
             }
 
-            NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            NSString *serverResponse = [[NSString alloc] initWithData:data encoding:UTF8StringEncoding];
 
             if (serverResponse && [serverResponse containsString:@"YES"]) {
                 [timeoutTimer invalidate]; // إيقاف المؤقت
                 [mainOverlay removeFromSuperview]; // إغلاق الواجهة فوراً
                 
-                // استخراج تاريخ الانتهاء
+                // استخراج تاريخ الانتهاء وعرض رسالة النجاح
                 NSArray *dataParts = [serverResponse componentsSeparatedByString:@"|"];
                 NSString *expiry = (dataParts.count > 1) ? dataParts[1] : @"Unlimited";
 
@@ -198,11 +201,8 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 @end
 
 %ctor {
-    // --- التحقق من وجود المكتبة أولاً لحماية الملف من الحذف ---
-    [DoonSecurity checkLibraryIntegrity];
-
-    // بدء الفحص بعد 3 ثوانٍ
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    // بدء الفحص بعد 5 ثوانٍ لضمان استقرار البيئة ومنع كراش البداية
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
 }
