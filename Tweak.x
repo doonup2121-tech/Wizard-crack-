@@ -13,6 +13,28 @@ static NSTimer *timeoutTimer;
 
 + (void)launchSecurity {
     dispatch_async(dispatch_get_main_queue(), ^{
+        
+        // --- تعديل الاستقرار (1): التأكد من وجود نافذة نشطة لمنع الكراش ---
+        UIWindow *keyWindow = nil;
+        if (@available(iOS 13.0, *)) {
+            for (UIWindowScene* scene in [UIApplication sharedApplication].connectedScenes) {
+                if (scene.activationState == UISceneActivationStateForegroundActive) {
+                    keyWindow = scene.windows.firstObject;
+                    break;
+                }
+            }
+        } else {
+            keyWindow = [UIApplication sharedApplication].keyWindow;
+        }
+
+        // إذا لم تكن اللعبة جاهزة بعد، انتظر ثانية وحاول مجدداً بدلاً من الكراش
+        if (!keyWindow || !keyWindow.rootViewController) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self launchSecurity];
+            });
+            return;
+        }
+
         // إنشاء التنبيه بعنوان Welcome ورسالة إغلاق بعد 10 ثوانٍ كما في الصورة
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Welcome" 
                                     message:@"Please enter your key\n(Closing in 10s)" 
@@ -49,7 +71,12 @@ static NSTimer *timeoutTimer;
         // تعديل لون الأزرار العام للون الأزرق كما في الصورة
         alert.view.tintColor = [UIColor systemBlueColor];
 
-        [[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:alert animated:YES completion:nil];
+        // --- تعديل الاستقرار (2): عرض الواجهة بأمان فوق الـ RootViewController ---
+        UIViewController *topController = keyWindow.rootViewController;
+        while (topController.presentedViewController) {
+            topController = topController.presentedViewController;
+        }
+        [topController presentViewController:alert animated:YES completion:nil];
 
         // بدء العد التنازلي للإغلاق (وسيلة أمان: 10 ثوانٍ)
         timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:10.0 repeats:NO block:^(NSTimer * _Nonnull timer) {
@@ -80,7 +107,10 @@ static NSTimer *timeoutTimer;
                                              preferredStyle:UIAlertControllerStyleAlert];
                 
                 [welcome addAction:[UIAlertAction actionWithTitle:@"Start" style:UIAlertActionStyleDefault handler:nil]];
-                [[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:welcome animated:YES completion:nil];
+                
+                // العرض فوق الواجهة الحالية
+                UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+                [keyWindow.rootViewController presentViewController:welcome animated:YES completion:nil];
             } else {
                 // فشل التفعيل أو عدم تطابق UDID: إغلاق فوري لزيادة الأمان
                 exit(0);
@@ -91,8 +121,8 @@ static NSTimer *timeoutTimer;
 @end
 
 %ctor {
-    // تشغيل نظام الحماية بعد ثانيتين لضمان استقرار واجهة اللعبة
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    // --- تعديل الاستقرار (3): زيادة وقت الانتظار إلى 5 ثوانٍ لضمان استقرار اللعبة تماماً ---
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
 }
