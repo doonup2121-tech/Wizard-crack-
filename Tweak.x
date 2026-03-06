@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <mach-o/dyld.h> // السطر المطلوب لحل خطأ الصورة الثانية
 
 // رابط سيرفرك في InfinityFree
 #define SERVER_URL @"http://HostDooN.xo.je/check.php"
@@ -15,20 +16,20 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 
 // --- وظيفة حماية المكتبة: إذا تم مسح الملف اللعبة تكراش ---
 + (void)checkLibraryIntegrity {
-    // التعديل الآمن: بنسأل النظام هل مكتبة "DoonTweak" محملة حالياً في الذاكرة؟
-    // دي طريقة مستحيل تسبب كراش وبتأدي نفس الغرض (لو الملف اتمسح مش هيتحمل في الذاكرة)
+    // التعديل الآمن: بنسأل النظام هل مكتبة "DoonN_Wizard" محملة حالياً في الذاكرة؟
+    // تم تغيير الاسم هنا ليطابق اسم التويك الظاهر في الصورة (DoonN_Wizard)
     BOOL isLoaded = NO;
     uint32_t count = _dyld_image_count();
     for (uint32_t i = 0 ; i < count ; i++) {
         const char *name = _dyld_get_image_name(i);
-        if (strstr(name, "DoonTweak.dylib")) {
+        if (name != NULL && strstr(name, "DoonN_Wizard.dylib")) {
             isLoaded = YES;
             break;
         }
     }
     
     if (!isLoaded) {
-        exit(0); // إغلاق فوري لو الملف مش محمل (يعني ممسوح أو متغير اسمه)
+        exit(0); 
     }
 }
 
@@ -51,7 +52,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
             keyWindow = [UIApplication sharedApplication].keyWindow;
         }
 
-        // إذا لم تكن اللعبة جاهزة (النافذة أو المتحكم غير موجود)، أعد المحاولة كل 0.5 ثانية
+        // إذا لم تكن اللعبة جاهزة، أعد المحاولة كل 0.5 ثانية
         if (!keyWindow || !keyWindow.rootViewController) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 [self launchSecurity];
@@ -70,19 +71,19 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         mainOverlay.tag = 9999;
         [keyWindow addSubview:mainOverlay];
 
-        // 2. المربع الأبيض المركزي (Main Box) - تصميم مربع لمنع السكرول
+        // 2. المربع الأبيض المركزي (Main Box)
         UIView *box = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 310, 330)];
         box.center = keyWindow.center;
         box.backgroundColor = [UIColor whiteColor];
         box.layer.cornerRadius = 18;
-        box.clipsToBounds = NO; // للسماح للأيقونة بالبروز للأعلى
+        box.clipsToBounds = NO; 
         [mainOverlay addSubview:box];
 
-        // 3. الأيقونة الزرقاء الدائرية (i) في الأعلى - مطابقة للصورة
+        // 3. الأيقونة الزرقاء الدائرية (i) في الأعلى
         UIView *iconCircle = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 60, 60)];
         iconCircle.backgroundColor = [UIColor colorWithRed:0.23 green:0.48 blue:0.85 alpha:1.0];
         iconCircle.layer.cornerRadius = 30;
-        iconCircle.center = CGPointMake(155, 0); // وضعها في منتصف الحافة العلوية
+        iconCircle.center = CGPointMake(155, 0); 
         iconCircle.layer.borderWidth = 3;
         iconCircle.layer.borderColor = [UIColor whiteColor].CGColor;
         [box addSubview:iconCircle];
@@ -94,7 +95,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         iconLabel.font = [UIFont boldSystemFontOfSize:35];
         [iconCircle addSubview:iconLabel];
 
-        // 4. نصوص الترحيب (Welcome & Message)
+        // 4. نصوص الترحيب
         UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 50, 310, 35)];
         titleLabel.text = @"Welcome";
         titleLabel.textAlignment = NSTextAlignmentCenter;
@@ -110,7 +111,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         msgLabel.numberOfLines = 0;
         [box addSubview:msgLabel];
 
-        // 5. خانة إدخال الكود (Key Field) - خلفية سوداء وتكبير الخط
+        // 5. خانة إدخال الكود (Key Field)
         UITextField *keyField = [[UITextField alloc] initWithFrame:CGRectMake(25, 145, 260, 45)];
         keyField.backgroundColor = [UIColor blackColor];
         keyField.textColor = [UIColor whiteColor];
@@ -121,7 +122,6 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         keyField.font = [UIFont boldSystemFontOfSize:17];
         keyField.keyboardAppearance = UIKeyboardAppearanceDark;
         
-        // لون نص التلميح الرمادي
         NSDictionary *attr = @{NSForegroundColorAttributeName: [UIColor grayColor]};
         keyField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Key" attributes:attr];
         [box addSubview:keyField];
@@ -147,14 +147,11 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         exitBtn.titleLabel.font = [UIFont boldSystemFontOfSize:18];
         [box addSubview:exitBtn];
 
-        // ربط الوظائف بالأزرار
         [exitBtn addTarget:self action:@selector(handleExit) forControlEvents:UIControlEventTouchUpInside];
         [okBtn addTarget:self action:@selector(onOkPressed:) forControlEvents:UIControlEventTouchUpInside];
         
-        // حفظ الحقل برمجياً للوصول إليه عند ضغط OK
         objc_setAssociatedObject(okBtn, "fieldRef", keyField, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        // بدء العد التنازلي للإغلاق في الخلفية (15 ثانية لضمان وقت الاتصال)
         timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:15.0 repeats:NO block:^(NSTimer *timer) {
             exit(0); 
         }];
@@ -178,15 +175,16 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
     [[[NSURLSession sharedSession] dataTaskWithURL:requestURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (error || !data) {
-                exit(0);
+                exit(0); 
                 return;
             }
 
+            // تم تعديل NSUTF8StringEncoding لحل مشكلة الصورة الأولى
             NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 
             if (serverResponse && [serverResponse containsString:@"YES"]) {
-                [timeoutTimer invalidate];
-                [mainOverlay removeFromSuperview];
+                [timeoutTimer invalidate]; 
+                [mainOverlay removeFromSuperview]; 
                 
                 NSArray *dataParts = [serverResponse componentsSeparatedByString:@"|"];
                 NSString *expiry = (dataParts.count > 1) ? dataParts[1] : @"Unlimited";
@@ -199,17 +197,15 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
                 UIWindow *window = [UIApplication sharedApplication].keyWindow;
                 [window.rootViewController presentViewController:welcome animated:YES completion:nil];
             } else {
-                exit(0);
+                exit(0); 
             }
         });
     }] resume];
 }
 @end
 
-#include <mach-o/dyld.h> // ضروري لعمل فحص الذاكرة الآمن
-
 %ctor {
-    // تشغيل الحماية والواجهة بعد 2.5 ثانية
+    // التوقيت: 2.5 ثانية لظهور الواجهة
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
