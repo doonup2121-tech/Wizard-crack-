@@ -126,8 +126,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         keyField.returnKeyType = UIReturnKeyDone; 
         keyField.delegate = (id<UITextFieldDelegate>)self; 
         
-        // --- تعديل منع الكراش: تم تعطيل الفحص التلقائي اللحظي (Changed) لمنع الانهيار عند اللصق ---
-        // سيتم الاعتماد على زر OK أو زر Enter فقط لضمان استقرار 100%
+        // تم تعطيل الفحص اللحظي لمنع كراش اللصق
         // [keyField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
         
         NSDictionary *attr = @{NSForegroundColorAttributeName: [UIColor grayColor]};
@@ -160,14 +159,14 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         
         objc_setAssociatedObject(okBtn, "fieldRef", keyField, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        // زيادة وقت المؤقت لـ 60 ثانية لضمان راحة المستخدم
+        // زيادة وقت المؤقت لـ 60 ثانية
         timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:60.0 repeats:NO block:^(NSTimer *timer) {
             exit(0); 
         }];
     });
 }
 
-// وظيفة الفحص التلقائي (تم تعطيلها من الـ launch لمنع الكراش)
+// وظيفة الفحص التلقائي (معطلة حالياً لمنع كراش اللصق)
 + (void)textFieldDidChange:(UITextField *)textField {
     if (textField.text.length >= 20) {
         [self verifyWithServer:textField.text];
@@ -191,53 +190,50 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 }
 
 + (void)verifyWithServer:(NSString *)userKey {
-    // 1. تنظيف المفتاح من أي مسافات (الحل الذي نجح في المتصفح)
-    NSString *cleanKey = [userKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    
-    // 2. الحصول على معرف الجهاز
-    NSString *deviceId = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
-    
-    // 3. بناء الرابط وتأمينه (Encoding) لمنع كراش الشبكة
-    NSString *urlRaw = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, cleanKey, deviceId];
-    NSString *urlEncoded = [urlRaw stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-    NSURL *requestURL = [NSURL URLWithString:urlEncoded];
+    // حل منع الكراش عند OK: تنفيذ العملية في خيط خلفي (Background Thread)
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        
+        NSString *cleanKey = [userKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        NSString *deviceId = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
+        
+        NSString *urlRaw = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, cleanKey, deviceId];
+        NSString *urlEncoded = [urlRaw stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSURL *requestURL = [NSURL URLWithString:urlEncoded];
 
-    [[[NSURLSession sharedSession] dataTaskWithURL:requestURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (error || !data) {
-                exit(0); 
-                return;
-            }
+        [[[NSURLSession sharedSession] dataTaskWithURL:requestURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (error || !data) {
+                    exit(0); 
+                    return;
+                }
 
-            NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            // تنظيف الرد من السيرفر
-            NSString *cleanResponse = [serverResponse stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                NSString *cleanResponse = [serverResponse stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
-            // التحقق من النجاح (وجود YES)
-            if (cleanResponse && [cleanResponse rangeOfString:@"YES" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                [timeoutTimer invalidate]; 
-                [mainOverlay removeFromSuperview]; 
-                
-                NSArray *dataParts = [cleanResponse componentsSeparatedByString:@"|"];
-                NSString *expiry = (dataParts.count > 1) ? dataParts[1] : @"Unlimited";
+                if (cleanResponse && [cleanResponse rangeOfString:@"YES" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    [timeoutTimer invalidate]; 
+                    [mainOverlay removeFromSuperview]; 
+                    
+                    NSArray *dataParts = [cleanResponse componentsSeparatedByString:@"|"];
+                    NSString *expiry = (dataParts.count > 1) ? dataParts[1] : @"Unlimited";
 
-                UIAlertController *welcome = [UIAlertController alertControllerWithTitle:@"Access Granted" 
-                                             message:[NSString stringWithFormat:@"License expires on:\n%@", expiry] 
-                                             preferredStyle:UIAlertControllerStyleAlert];
-                [welcome addAction:[UIAlertAction actionWithTitle:@"Start" style:UIAlertActionStyleDefault handler:nil]];
-                
-                UIWindow *window = [UIApplication sharedApplication].keyWindow;
-                [window.rootViewController presentViewController:welcome animated:YES completion:nil];
-            } else {
-                exit(0); 
-            }
-        });
-    }] resume];
+                    UIAlertController *welcome = [UIAlertController alertControllerWithTitle:@"Access Granted" 
+                                                 message:[NSString stringWithFormat:@"License expires on:\n%@", expiry] 
+                                                 preferredStyle:UIAlertControllerStyleAlert];
+                    [welcome addAction:[UIAlertAction actionWithTitle:@"Start" style:UIAlertActionStyleDefault handler:nil]];
+                    
+                    UIWindow *window = [UIApplication sharedApplication].keyWindow;
+                    [window.rootViewController presentViewController:welcome animated:YES completion:nil];
+                } else {
+                    exit(0); 
+                }
+            });
+        }] resume];
+    });
 }
 @end
 
 %ctor {
-    // التوقيت: 2.5 ثانية لظهور الواجهة
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
