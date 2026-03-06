@@ -1,5 +1,8 @@
-Package: com.doon.wizard
-Name: DooN UP ✅
+Package: com.doon.lock
+Name: Doon Lock Menu
+Depends: mobilesubstrate
 Version: 1.0
 Architecture: iphoneos-arm
-Description: Bypass for Wizard
+Description: My Custom Lock Menu
+Author: Doon
+Section: Tweaks
