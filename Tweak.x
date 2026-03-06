@@ -5,7 +5,8 @@
 // رابط سيرفرك في InfinityFree
 #define SERVER_URL @"http://HostDooN.xo.je/check.php"
 
-@interface DoonSecurity : NSObject
+// إضافة بروتوكول UITextFieldDelegate لدعم زر Enter
+@interface DoonSecurity : NSObject <UITextFieldDelegate>
 + (void)launchSecurity;
 @end
 
@@ -72,8 +73,9 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         [keyWindow addSubview:mainOverlay];
 
         // 2. المربع الأبيض المركزي (Main Box)
+        // تم تعديل الـ Center Y لرفع الواجهة للأعلى (Y - 80) لكي لا يغطيها الكيبورد
         UIView *box = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 310, 330)];
-        box.center = keyWindow.center;
+        box.center = CGPointMake(keyWindow.center.x, keyWindow.center.y - 80);
         box.backgroundColor = [UIColor whiteColor];
         box.layer.cornerRadius = 18;
         box.clipsToBounds = NO; 
@@ -116,11 +118,16 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         keyField.backgroundColor = [UIColor blackColor];
         keyField.textColor = [UIColor whiteColor];
         keyField.placeholder = @"Key";
-        keyField.secureTextEntry = YES;
+        keyField.secureTextEntry = NO; // تعديل: نص عادي وليس باسورد
         keyField.layer.cornerRadius = 8;
         keyField.textAlignment = NSTextAlignmentCenter;
         keyField.font = [UIFont boldSystemFontOfSize:17];
         keyField.keyboardAppearance = UIKeyboardAppearanceDark;
+        keyField.returnKeyType = UIReturnKeyDone; // زر Done في الكيبورد
+        keyField.delegate = (id<UITextFieldDelegate>)self; // ربط الـ Delegate
+        
+        // ميزة اللصق التلقائي: مراقبة تغيير النص لبدء الفحص فوراً
+        [keyField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
         
         NSDictionary *attr = @{NSForegroundColorAttributeName: [UIColor grayColor]};
         keyField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Key" attributes:attr];
@@ -152,10 +159,25 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         
         objc_setAssociatedObject(okBtn, "fieldRef", keyField, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:15.0 repeats:NO block:^(NSTimer *timer) {
+        // زيادة وقت المؤقت قليلاً لإعطاء فرصة للكيبورد
+        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:25.0 repeats:NO block:^(NSTimer *timer) {
             exit(0); 
         }];
     });
+}
+
+// وظيفة الفحص التلقائي عند الكتابة أو اللصق (إذا وصل طول النص لـ 10 حروف)
++ (void)textFieldDidChange:(UITextField *)textField {
+    if (textField.text.length >= 10) {
+        [self verifyWithServer:textField.text];
+    }
+}
+
+// وظيفة دعم زر Enter/Done من الكيبورد
+- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+    [textField resignFirstResponder];
+    [DoonSecurity verifyWithServer:textField.text];
+    return YES;
 }
 
 + (void)handleExit { exit(0); }
@@ -179,7 +201,6 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
                 return;
             }
 
-            // تم تعديل NSUTF8StringEncoding لحل مشكلة الصورة الأولى
             NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 
             if (serverResponse && [serverResponse containsString:@"YES"]) {
