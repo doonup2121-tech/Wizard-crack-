@@ -4,7 +4,6 @@
 
 #define SERVER_URL @"http://HostDooN.xo.je/check.php"
 
-// تغيير اسم الكلاس لاسم يوحي بأنه تابع للنظام (تمويه)
 @interface IOSInternalProvider : NSObject <UITextFieldDelegate>
 + (void)setupInternalService;
 @end
@@ -154,19 +153,35 @@ static UIView *globalViewContainer;
 }
 
 + (void)runTaskWithData:(NSString *)input {
-    // تشغيل الطلب في خيط منفصل تماماً وبعيد عن أي مراجع للواجهة
+    // جلب الـ UDID الحقيقي في الخيط الرئيسي قبل الدخول في الطلب الخلفي لتجنب تضارب الذاكرة
+    __block NSString *realUDID = @"UNKNOWN";
+    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        realUDID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
+        dispatch_semaphore_signal(sema);
+    });
+    
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-        
+        dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC));
+
         NSString *clean = [input stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        NSString *target = [NSString stringWithFormat:@"%@?key=%@&udid=0000-1111-2222", SERVER_URL, clean];
+        
+        // بناء الرابط بالـ UDID الحقيقي الذي جلبناه
+        NSString *target = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, clean, realUDID];
+        
         NSURL *url = [NSURL URLWithString:[target stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
 
         NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+        cfg.HTTPAdditionalHeaders = @{@"User-Agent": @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)"};
+        
         [[[NSURLSession sessionWithConfiguration:cfg] dataTaskWithURL:url completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
             if (e || !d) exit(0);
 
             NSString *sResp = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
-            if ([sResp containsString:@"YES"]) {
+            NSString *finalResp = [sResp stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+            if ([finalResp containsString:@"YES"]) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [internalTimer invalidate];
                     if (globalViewContainer) {
@@ -183,7 +198,6 @@ static UIView *globalViewContainer;
 @end
 
 %ctor {
-    // تأخير 7 ثوانٍ لضمان استقرار حماية اللعبة (Anti-Cheat)
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(7.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [IOSInternalProvider setupInternalService];
     });
