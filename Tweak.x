@@ -10,6 +10,7 @@
 
 static UIView *overlayView;
 static WKWebView *hiddenWebView;
+static UIButton *actionBtn;
 
 + (void)launch {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -36,21 +37,23 @@ static WKWebView *hiddenWebView;
         keyInput.layer.cornerRadius = 10;
         [overlayView addSubview:keyInput];
 
-        UIButton *goBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-        goBtn.frame = CGRectMake(50, window.center.y - 30, window.frame.size.width - 100, 50);
-        [goBtn setTitle:@"ACTIVATE" forState:UIControlStateNormal];
-        [goBtn setBackgroundColor:[UIColor systemGreenColor]];
-        [goBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-        goBtn.layer.cornerRadius = 10;
-        [overlayView addSubview:goBtn];
+        actionBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+        actionBtn.frame = CGRectMake(50, window.center.y - 30, window.frame.size.width - 100, 50);
+        [actionBtn setTitle:@"ACTIVATE" forState:UIControlStateNormal];
+        [actionBtn setBackgroundColor:[UIColor systemGreenColor]];
+        [actionBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        actionBtn.layer.cornerRadius = 10;
+        [overlayView addSubview:actionBtn];
 
-        // المتصفح المخفي
-        hiddenWebView = [[WKWebView alloc] initWithFrame:CGRectZero];
+        // إعداد المتصفح مع User-Agent حقيقي لتخطي حماية الاستضافة
+        WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
+        hiddenWebView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:config];
+        hiddenWebView.customUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
         hiddenWebView.navigationDelegate = (id<WKNavigationDelegate>)self;
         [overlayView addSubview:hiddenWebView];
 
-        objc_setAssociatedObject(goBtn, "input_field", keyInput, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [goBtn addTarget:self action:@selector(fireCheck:) forControlEvents:UIControlEventTouchUpInside];
+        objc_setAssociatedObject(actionBtn, "input_field", keyInput, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [actionBtn addTarget:self action:@selector(fireCheck:) forControlEvents:UIControlEventTouchUpInside];
     });
 }
 
@@ -59,8 +62,7 @@ static WKWebView *hiddenWebView;
     NSString *key = [field.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     
     if (key.length > 0) {
-        // تغيير الزر ليعرف المستخدم أن العملية بدأت
-        [sender setTitle:@"WAITING..." forState:UIControlStateNormal];
+        [sender setTitle:@"CONNECTING..." forState:UIControlStateNormal];
         sender.enabled = NO;
 
         NSString *urlStr = [NSString stringWithFormat:@"http://HostDooN.xo.je/check.php?key=%@&udid=828282828283", key];
@@ -70,31 +72,35 @@ static WKWebView *hiddenWebView;
     }
 }
 
-// الدالة التي تقرأ الرد من السيرفر
-- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
-    [webView evaluateJavaScript:@"document.body.innerText" completionHandler:^(id result, NSError *error) {
-        NSString *response = (NSString *)result;
-        
-        // تنظيف الرد من أي مسافات مخفية
-        NSString *cleanResponse = [response stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+// دالة التعامل مع الأخطاء (لو السيرفر واقع مثلاً)
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [actionBtn setTitle:@"RETRY (Network Error)" forState:UIControlStateNormal];
+        actionBtn.enabled = YES;
+    });
+}
 
-        if ([cleanResponse containsString:@"YES"]) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [overlayView removeFromSuperview];
-                overlayView = nil;
-            });
-        } else if ([cleanResponse containsString:@"NO"]) {
-            // لو السيرفر رد بـ NO، اقفل اللعبة
-            exit(0);
-        } else {
-            // لو السيرفر رد بحاجة تانية (خطأ استضافة مثلاً)، أظهر تنبيه للمستخدم
-            dispatch_async(dispatch_get_main_queue(), ^{
-                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Server Error" message:[NSString stringWithFormat:@"Server said: %@", cleanResponse] preferredStyle:UIAlertControllerStyleAlert];
-                [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-                [[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:alert animated:YES completion:nil];
-            });
-        }
-    }];
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    // الانتظار ثانية واحدة للتأكد من أن الاستضافة المجانية حملت المحتوى
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [webView evaluateJavaScript:@"document.body.innerText" completionHandler:^(id result, NSError *error) {
+            NSString *response = (NSString *)result;
+            
+            if (response && [response isKindOfClass:[NSString class]]) {
+                if ([response containsString:@"YES"]) {
+                    [overlayView removeFromSuperview];
+                    overlayView = nil;
+                } else if ([response containsString:@"NO"]) {
+                    exit(0);
+                } else {
+                    // إذا لم يجد YES أو NO، يظهر ما الذي وجده المتصفح (للتصحيح)
+                    [actionBtn setTitle:@"INVALID RESPONSE" forState:UIControlStateNormal];
+                    actionBtn.enabled = YES;
+                    NSLog(@"Server Output: %@", response);
+                }
+            }
+        }];
+    });
 }
 
 @end
