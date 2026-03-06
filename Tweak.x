@@ -15,10 +15,20 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 
 // --- وظيفة حماية المكتبة: إذا تم مسح الملف اللعبة تكراش ---
 + (void)checkLibraryIntegrity {
-    // ملاحظة: تأكد أن اسم الملف 'DoonTweak.dylib' مطابق لاسم الملف الذي يتم إنتاجه عند البناء (Build)
-    NSString *tweakPath = @"/Library/MobileSubstrate/DynamicLibraries/DoonTweak.dylib";
-    if (![[NSFileManager defaultManager] fileExistsAtPath:tweakPath]) {
-        exit(0); // إغلاق فوري للعبة في حال عدم وجود المكتبة
+    // التعديل الآمن: بنسأل النظام هل مكتبة "DoonTweak" محملة حالياً في الذاكرة؟
+    // دي طريقة مستحيل تسبب كراش وبتأدي نفس الغرض (لو الملف اتمسح مش هيتحمل في الذاكرة)
+    BOOL isLoaded = NO;
+    uint32_t count = _dyld_image_count();
+    for (uint32_t i = 0 ; i < count ; i++) {
+        const char *name = _dyld_get_image_name(i);
+        if (strstr(name, "DoonTweak.dylib")) {
+            isLoaded = YES;
+            break;
+        }
+    }
+    
+    if (!isLoaded) {
+        exit(0); // إغلاق فوري لو الملف مش محمل (يعني ممسوح أو متغير اسمه)
     }
 }
 
@@ -161,27 +171,23 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 }
 
 + (void)verifyWithServer:(NSString *)userKey {
-    // استخراج الـ UDID أوتوماتيكياً
     NSString *deviceId = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
     NSString *fullRequest = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, userKey, deviceId];
     NSURL *requestURL = [NSURL URLWithString:fullRequest];
 
-    // استخدام NSURLSession بدلاً من الطلب المتزامن لمنع الكراش (Async Request)
     [[[NSURLSession sharedSession] dataTaskWithURL:requestURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (error || !data) {
-                exit(0); // غلق اللعبة عند فشل الاتصال
+                exit(0);
                 return;
             }
 
-            // تصحيح الخطأ المطبعي: تم تغيير UTF8StringEncoding إلى NSUTF8StringEncoding
             NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 
             if (serverResponse && [serverResponse containsString:@"YES"]) {
-                [timeoutTimer invalidate]; // إيقاف المؤقت
-                [mainOverlay removeFromSuperview]; // إغلاق الواجهة فوراً
+                [timeoutTimer invalidate];
+                [mainOverlay removeFromSuperview];
                 
-                // استخراج تاريخ الانتهاء
                 NSArray *dataParts = [serverResponse componentsSeparatedByString:@"|"];
                 NSString *expiry = (dataParts.count > 1) ? dataParts[1] : @"Unlimited";
 
@@ -190,19 +196,20 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
                                              preferredStyle:UIAlertControllerStyleAlert];
                 [welcome addAction:[UIAlertAction actionWithTitle:@"Start" style:UIAlertActionStyleDefault handler:nil]];
                 
-                // العرض فوق الـ keyWindow الحالي لمنع الكراش
                 UIWindow *window = [UIApplication sharedApplication].keyWindow;
                 [window.rootViewController presentViewController:welcome animated:YES completion:nil];
             } else {
-                exit(0); // غلق اللعبة عند فشل التفعيل
+                exit(0);
             }
         });
     }] resume];
 }
 @end
 
+#include <mach-o/dyld.h> // ضروري لعمل فحص الذاكرة الآمن
+
 %ctor {
-    // تم تأخير التشغيل إلى ثانيتين ونصف (2.5 ثانية) كما طلبت
+    // تشغيل الحماية والواجهة بعد 2.5 ثانية
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
