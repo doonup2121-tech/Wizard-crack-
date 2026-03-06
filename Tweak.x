@@ -83,7 +83,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 
         // 3. الأيقونة الزرقاء الدائرية (i) في الأعلى
         UIView *iconCircle = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 60, 60)];
-        iconCircle.backgroundColor = [UIColor colorRed:0.23 green:0.48 blue:0.85 alpha:1.0];
+        iconCircle.backgroundColor = [UIColor colorWithRed:0.23 green:0.48 blue:0.85 alpha:1.0];
         iconCircle.layer.cornerRadius = 30;
         iconCircle.center = CGPointMake(155, 0); 
         iconCircle.layer.borderWidth = 3;
@@ -126,7 +126,8 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         keyField.returnKeyType = UIReturnKeyDone; 
         keyField.delegate = (id<UITextFieldDelegate>)self; 
         
-        // ملاحظة: تم إيقاف الفحص التلقائي هنا لمنع كراش اللصق (Paste)
+        // --- تعديل منع الكراش: تم تعطيل الفحص التلقائي اللحظي (Changed) لمنع الانهيار عند اللصق ---
+        // سيتم الاعتماد على زر OK أو زر Enter فقط لضمان استقرار 100%
         // [keyField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
         
         NSDictionary *attr = @{NSForegroundColorAttributeName: [UIColor grayColor]};
@@ -159,16 +160,16 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         
         objc_setAssociatedObject(okBtn, "fieldRef", keyField, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-        // المؤقت الزمني للإغلاق التلقائي
-        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:45.0 repeats:NO block:^(NSTimer *timer) {
+        // زيادة وقت المؤقت لـ 60 ثانية لضمان راحة المستخدم
+        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:60.0 repeats:NO block:^(NSTimer *timer) {
             exit(0); 
         }];
     });
 }
 
-// وظيفة الفحص التلقائي (اختيارية، تم تعطيل استدعائها بالأعلى لمنع كراش اللصق)
+// وظيفة الفحص التلقائي (تم تعطيلها من الـ launch لمنع الكراش)
 + (void)textFieldDidChange:(UITextField *)textField {
-    if (textField.text.length >= 25) {
+    if (textField.text.length >= 20) {
         [self verifyWithServer:textField.text];
     }
 }
@@ -190,13 +191,13 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 }
 
 + (void)verifyWithServer:(NSString *)userKey {
-    // 1. تنظيف المفتاح من المسافات المخفية
+    // 1. تنظيف المفتاح من أي مسافات (الحل الذي نجح في المتصفح)
     NSString *cleanKey = [userKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     
-    // 2. الحصول على UDID
+    // 2. الحصول على معرف الجهاز
     NSString *deviceId = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
     
-    // 3. تشفير الرابط بالكامل لضمان الاستقرار
+    // 3. بناء الرابط وتأمينه (Encoding) لمنع كراش الشبكة
     NSString *urlRaw = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, cleanKey, deviceId];
     NSString *urlEncoded = [urlRaw stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
     NSURL *requestURL = [NSURL URLWithString:urlEncoded];
@@ -209,10 +210,10 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
             }
 
             NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            // تنظيف رد السيرفر
+            // تنظيف الرد من السيرفر
             NSString *cleanResponse = [serverResponse stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
-            // 4. التحقق من وجود كلمة YES بمرونة (Case Insensitive)
+            // التحقق من النجاح (وجود YES)
             if (cleanResponse && [cleanResponse rangeOfString:@"YES" options:NSCaseInsensitiveSearch].location != NSNotFound) {
                 [timeoutTimer invalidate]; 
                 [mainOverlay removeFromSuperview]; 
@@ -236,6 +237,7 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 @end
 
 %ctor {
+    // التوقيت: 2.5 ثانية لظهور الواجهة
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
