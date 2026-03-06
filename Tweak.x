@@ -202,8 +202,8 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 @end
 
 %ctor {
-    // تم تأخير التشغيل إلى 5 ثوانٍ لضمان استقرار الملفات ومنع كراش البداية
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    // تم تأخير التشغيل إلى ثانيتين ونصف (2.5 ثانية) كما طلبت
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [DoonSecurity launchSecurity];
     });
 }
