@@ -160,15 +160,15 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
         objc_setAssociatedObject(okBtn, "fieldRef", keyField, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
         // زيادة وقت المؤقت قليلاً لإعطاء فرصة للكيبورد
-        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:25.0 repeats:NO block:^(NSTimer *timer) {
+        timeoutTimer = [NSTimer scheduledTimerWithTimeInterval:35.0 repeats:NO block:^(NSTimer *timer) {
             exit(0); 
         }];
     });
 }
 
-// وظيفة الفحص التلقائي عند الكتابة أو اللصق (إذا وصل طول النص لـ 10 حروف)
+// وظيفة الفحص التلقائي عند الكتابة أو اللصق (إذا وصل طول النص لـ 20 حرف لضمان اكتمال الكود)
 + (void)textFieldDidChange:(UITextField *)textField {
-    if (textField.text.length >= 10) {
+    if (textField.text.length >= 20) {
         [self verifyWithServer:textField.text];
     }
 }
@@ -190,9 +190,15 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
 }
 
 + (void)verifyWithServer:(NSString *)userKey {
+    // التحسين المضاف: تنظيف الكود من أي مسافات مخفية ناتجة عن اللصق
+    NSString *cleanKey = [userKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    
     NSString *deviceId = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
-    NSString *fullRequest = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, userKey, deviceId];
-    NSURL *requestURL = [NSURL URLWithString:fullRequest];
+    
+    // التحسين المضاف: تشفير الرابط (Encoding) لضمان عدم فشل الطلب بسبب الرموز
+    NSString *urlRaw = [NSString stringWithFormat:@"%@?key=%@&udid=%@", SERVER_URL, cleanKey, deviceId];
+    NSString *urlEncoded = [urlRaw stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+    NSURL *requestURL = [NSURL URLWithString:urlEncoded];
 
     [[[NSURLSession sharedSession] dataTaskWithURL:requestURL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -202,12 +208,14 @@ static UIView *mainOverlay; // لتخزين الواجهة وإزالتها عن
             }
 
             NSString *serverResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            // تنظيف رد السيرفر للتأكد من المقارنة الصحيحة
+            NSString *cleanResponse = [serverResponse stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
-            if (serverResponse && [serverResponse containsString:@"YES"]) {
+            if (cleanResponse && [cleanResponse rangeOfString:@"YES" options:NSCaseInsensitiveSearch].location != NSNotFound) {
                 [timeoutTimer invalidate]; 
                 [mainOverlay removeFromSuperview]; 
                 
-                NSArray *dataParts = [serverResponse componentsSeparatedByString:@"|"];
+                NSArray *dataParts = [cleanResponse componentsSeparatedByString:@"|"];
                 NSString *expiry = (dataParts.count > 1) ? dataParts[1] : @"Unlimited";
 
                 UIAlertController *welcome = [UIAlertController alertControllerWithTitle:@"Access Granted" 
