@@ -1,123 +1,89 @@
 #import <UIKit/UIKit.h>
-#import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
-@interface GhostValidator : NSObject <WKNavigationDelegate>
-+ (void)launch;
+@interface SystemValidator : NSObject
++ (void)showMenu;
 @end
 
-@implementation GhostValidator
+@implementation SystemValidator
 
-static UIView *overlayView;
-static WKWebView *hiddenWebView;
-static UIButton *actionBtn;
+static UIView *mainView;
 
-+ (void)launch {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        UIWindow *window = nil;
-        if (@available(iOS 13.0, *)) {
-            for (UIWindowScene* scene in [UIApplication sharedApplication].connectedScenes) {
-                if (scene.activationState == UISceneActivationStateForegroundActive) {
-                    window = scene.windows.firstObject;
-                    break;
-                }
-            }
-        }
-        if (!window) window = [UIApplication sharedApplication].keyWindow;
++ (void)showMenu {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIWindow *window = [UIApplication sharedApplication].keyWindow;
         if (!window) return;
 
-        overlayView = [[UIView alloc] initWithFrame:window.bounds];
-        overlayView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.9];
-        [window addSubview:overlayView];
+        mainView = [[UIView alloc] initWithFrame:window.bounds];
+        mainView.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.8];
+        [window addSubview:mainView];
 
-        UITextField *keyInput = [[UITextField alloc] initWithFrame:CGRectMake(50, window.center.y - 100, window.frame.size.width - 100, 50)];
-        keyInput.placeholder = @"ENTER KEY";
-        keyInput.backgroundColor = [UIColor whiteColor];
-        keyInput.textAlignment = NSTextAlignmentCenter;
-        keyInput.layer.cornerRadius = 10;
-        keyInput.autocorrectionType = UITextAutocorrectionTypeNo;
-        [overlayView addSubview:keyInput];
+        UITextField *field = [[UITextField alloc] initWithFrame:CGRectMake(50, 150, window.frame.size.width-100, 50)];
+        field.placeholder = @"ENTER KEY HERE";
+        field.backgroundColor = [UIColor whiteColor];
+        field.textAlignment = NSTextAlignmentCenter;
+        field.layer.cornerRadius = 8;
+        [mainView addSubview:field];
 
-        actionBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-        actionBtn.frame = CGRectMake(50, window.center.y - 30, window.frame.size.width - 100, 50);
-        [actionBtn setTitle:@"ACTIVATE" forState:UIControlStateNormal];
-        [actionBtn setBackgroundColor:[UIColor systemGreenColor]];
-        [actionBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-        actionBtn.layer.cornerRadius = 10;
-        [overlayView addSubview:actionBtn];
+        UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
+        btn.frame = CGRectMake(50, 220, window.frame.size.width-100, 50);
+        btn.backgroundColor = [UIColor systemBlueColor];
+        [btn setTitle:@"VERIFY & PLAY" forState:UIControlStateNormal];
+        [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        btn.layer.cornerRadius = 8;
+        [mainView addSubview:btn];
 
-        // إعداد المتصفح بـ User-Agent قوي جداً
-        WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
-        hiddenWebView = [[WKWebView alloc] initWithFrame:CGRectMake(0,0,1,1) configuration:config]; // حجم صغير جداً بدل Zero
-        hiddenWebView.customUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
-        hiddenWebView.navigationDelegate = (id<WKNavigationDelegate>)self;
-        hiddenWebView.alpha = 0.01; // شبه مخفي
-        [overlayView addSubview:hiddenWebView];
-
-        objc_setAssociatedObject(actionBtn, "input_field", keyInput, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [actionBtn addTarget:self action:@selector(fireCheck:) forControlEvents:UIControlEventTouchUpInside];
+        objc_setAssociatedObject(btn, "k_field", field, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [btn addTarget:self action:@selector(check:) forControlEvents:UIControlEventTouchUpInside];
     });
 }
 
-+ (void)fireCheck:(UIButton *)sender {
-    UITextField *field = objc_getAssociatedObject(sender, "input_field");
-    NSString *key = [field.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    
++ (void)check:(UIButton *)sender {
+    UITextField *f = objc_getAssociatedObject(sender, "k_field");
+    NSString *key = [f.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
     if (key.length > 0) {
-        [sender setTitle:@"TRYING HTTPS..." forState:UIControlStateNormal];
-        sender.enabled = NO;
-
-        // جرب HTTPS أولاً لأنه أكثر أماناً وأسرع في الاستجابة
-        NSString *urlStr = [NSString stringWithFormat:@"https://HostDooN.xo.je/check.php?key=%@&udid=828282828283", key];
-        NSURL *url = [NSURL URLWithString:[urlStr stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
+        [sender setTitle:@"CHECKING..." forState:UIControlStateNormal];
         
-        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-        request.timeoutInterval = 20.0;
-        [hiddenWebView loadRequest:request];
-    }
-}
+        // استخدام NSURLSession بالطرقة التقليدية بس مع إضافة "نخوة" للنظام
+        NSString *urlStr = [NSString stringWithFormat:@"http://HostDooN.xo.je/check.php?key=%@&udid=828282828283", key];
+        NSURL *url = [NSURL URLWithString:[urlStr stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
 
-// إذا فشل الـ HTTPS جرب الـ HTTP العادي تلقائياً
-- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
-    if ([webView.URL.scheme isEqualToString:@"https"]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [actionBtn setTitle:@"FALLBACK HTTP..." forState:UIControlStateNormal];
-            NSString *newUrl = [webView.URL.absoluteString stringByReplacingOccurrencesOfString:@"https://" withString:@"http://"];
-            [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:newUrl]]];
-        });
-    } else {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [actionBtn setTitle:@"FAILED: CHECK INTERNET" forState:UIControlStateNormal];
-            actionBtn.enabled = YES;
-        });
-    }
-}
+        // طلب البيانات بدون استخدام الـ WebView المعلق
+        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:15.0];
+        [request setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" forHTTPHeaderField:@"User-Agent"];
 
-- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
-    // انتظار بسيط لضمان تخطي حماية الاستضافة
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [webView evaluateJavaScript:@"document.body.innerText" completionHandler:^(id result, NSError *error) {
-            NSString *response = (NSString *)result;
+        [[[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
             
-            if (response && [response isKindOfClass:[NSString class]]) {
-                if ([response containsString:@"YES"]) {
-                    [overlayView removeFromSuperview];
-                    overlayView = nil;
-                } else if ([response containsString:@"NO"]) {
+            if (error) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [sender setTitle:@"RETRY (NO INTERNET)" forState:UIControlStateNormal];
+                });
+                return;
+            }
+
+            if (data) {
+                NSString *res = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                // تنظيف الرد من أي كود HTML ممكن تبعته الاستضافة المجانية
+                if ([res containsString:@"YES"]) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [mainView removeFromSuperview];
+                        mainView = nil;
+                    });
+                } else if ([res containsString:@"NO"]) {
                     exit(0);
                 } else {
-                    // لو الرد غير معروف، أظهر أول 20 حرف منه للتصحيح
-                    NSString *shortRes = response.length > 20 ? [response substringToIndex:20] : response;
-                    [actionBtn setTitle:[NSString stringWithFormat:@"RES: %@", shortRes] forState:UIControlStateNormal];
-                    actionBtn.enabled = YES;
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [sender setTitle:@"INVALID KEY" forState:UIControlStateNormal];
+                    });
                 }
             }
-        }];
-    });
+        }] resume];
+    }
 }
 
 @end
 
 %ctor {
-    [GhostValidator launch];
+    [SystemValidator showMenu];
 }
