@@ -1,82 +1,59 @@
 #import <UIKit/UIKit.h>
-#import <objc/runtime.h>
 
-#define S_URL @"http://HostDooN.xo.je/check.php"
-
-@interface TestSecurity : NSObject
-+ (void)showBox;
+@interface StealthTest : NSObject
 @end
 
-@implementation TestSecurity
+@implementation StealthTest
 
-static UIView *overlay;
+static UIView *miniView;
 
-+ (void)showBox {
-    dispatch_async(dispatch_get_main_queue(), ^{
++ (void)load {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         UIWindow *win = [UIApplication sharedApplication].keyWindow;
         if (!win) return;
 
-        overlay = [[UIView alloc] initWithFrame:win.bounds];
-        overlay.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.7];
-        [win addSubview:overlay];
+        miniView = [[UIView alloc] initWithFrame:win.bounds];
+        miniView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.8];
+        [win addSubview:miniView];
 
-        UIView *box = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 280, 200)];
-        box.center = win.center;
-        box.backgroundColor = [UIColor whiteColor];
-        box.layer.cornerRadius = 10;
-        [overlay addSubview:box];
+        UIButton *checkBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        checkBtn.frame = CGRectMake(0, 0, 200, 50);
+        checkBtn.center = win.center;
+        checkBtn.backgroundColor = [UIColor redColor];
+        [checkBtn setTitle:@"TAP TO TEST" forState:UIControlStateNormal];
+        [miniView addSubview:checkBtn];
 
-        UITextField *input = [[UITextField alloc] initWithFrame:CGRectMake(20, 40, 240, 40)];
-        input.placeholder = @"Enter Key";
-        input.borderStyle = UITextBorderStyleRoundedRect;
-        input.textAlignment = NSTextAlignmentCenter;
-        [box addSubview:input];
-
-        UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-        btn.frame = CGRectMake(20, 100, 240, 50);
-        [btn setTitle:@"VERIFY" forState:UIControlStateNormal];
-        [btn setBackgroundColor:[UIColor systemBlueColor]];
-        [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-        btn.layer.cornerRadius = 5;
-        [box addSubview:btn];
-
-        // ربط الحقول بالزر
-        objc_setAssociatedObject(btn, "input_key", input, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [btn addTarget:self action:@selector(checkKey:) forControlEvents:UIControlEventTouchUpInside];
+        [checkBtn addTarget:self action:@selector(doCheck) forControlEvents:UIControlEventTouchUpInside];
     });
 }
 
-+ (void)checkKey:(UIButton *)sender {
-    UITextField *field = objc_getAssociatedObject(sender, "input_key");
-    NSString *key = [field.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-
-    if (key.length == 0) return;
-
-    // طلب بسيط جداً (Simple GET)
-    NSString *fullUrl = [NSString stringWithFormat:@"%@?key=%@", S_URL, key];
-    NSURL *url = [NSURL URLWithString:[fullUrl stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
-
-    [[[NSURLSession sharedSession] dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
++ (void)doCheck {
+    // طريقة "قديمة جداً" لجلب البيانات لمنع اكتشاف NSURLSession
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        
+        // رابط تجريبي مباشر (تأكد أن السيرفر يطبع YES فقط)
+        NSString *urlStr = @"http://HostDooN.xo.je/check.php?key=TEST";
+        NSURL *url = [NSURL URLWithString:urlStr];
+        
+        NSError *error = nil;
+        // استخدام NSData لجلب المحتوى بشكل صامت (Low Level)
+        NSData *data = [NSData dataWithContentsOfURL:url options:NSDataReadingUncached error:&error];
+        
         if (data) {
             NSString *res = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
             if ([res containsString:@"YES"]) {
-                // نجاح -> إخفاء الواجهة
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    [overlay removeFromSuperview];
-                    overlay = nil;
+                    [miniView removeFromSuperview];
                 });
             } else {
-                // فشل -> إغلاق اللعبة
                 exit(0);
             }
+        } else {
+            // لو فشل الاتصال خالص (اللعبة منعت البيانات)
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [miniView setBackgroundColor:[UIColor yellowColor]]; // تنبيه بالفشل
+            });
         }
-    }] resume];
-}
-
-@end
-
-%ctor {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [TestSecurity showBox];
     });
 }
+@end
