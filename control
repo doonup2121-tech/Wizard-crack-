@@ -1,8 +1,9 @@
-Package: com.doon.lock
-Name: Doon Lock Menu
-Depends: mobilesubstrate
-Version: 1.0
+Package: com.doon.wizard
+Name: DooN_Wizard
+Depends: mobilesubstrate, firmware (>= 13.0)
+Version: 1.0.0
 Architecture: iphoneos-arm
-Description: My Custom Lock Menu
-Author: Doon
+Description: Advanced Physics Visuals for 8 Ball Pool. Includes Color Paths, Ghost Ball, and Pocket Alerts.
+Maintainer: DooN
+Author: DooN
 Section: Tweaks
